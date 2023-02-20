@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "calibration",
+			"path": "../../../../../Documents/PlatformIO/Projects/calibration"
+		},
+		{
+			"name": "assistAid_ble_ota_test",
+			"path": "../../../../../Documents/PlatformIO/Projects/assistAid_ble_ota_test"
+		}
+	],
+	"settings": {}
+}

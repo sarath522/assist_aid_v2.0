@@ -385,6 +385,7 @@ void check_battery_status()
 
 void display_charging_status()
 {
+  
   int x = 105;
   int y = 0;
   display.drawRect(x + 0, y + 0, 19, 10);
@@ -393,6 +394,7 @@ void display_charging_status()
   display.drawLine(x + 4, y + 0, x + 0, y + 4);
   display.drawLine(x + 0, y + 4, x + 4, y + 4);
   display.drawLine(x + 4, y + 4, x + 0, y + 8);
+  
 }
 
 // ota update function
@@ -470,20 +472,11 @@ void display_battery_bars(int bars)
   display.display();
 }
 
+bool batt_full = false;
+
 void display_update()
 {
-  bool batt_full = false;
-  if (reset_values == true)
-  {
-
-    prev_display_data1 = 0;
-    display_data = 0;
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(ArialMT_Plain_24);
-    display.drawString(25, 25, "0.00Kg");
-    display.display();
-    reset_values = false;
-  }
+  
   if ((digitalRead(battery_status1_pin) == LOW) && (digitalRead(battery_status2_pin) == HIGH))
   {
     charger_connected = true;
@@ -495,7 +488,7 @@ void display_update()
   }
   else if ((digitalRead(battery_status1_pin) == HIGH) && (digitalRead(battery_status2_pin) == LOW))
   {
-    bool batt_full = true;
+    batt_full = true;
     Serial.println("BT full");
     EEPROM.write(0, 4);
     EEPROM.commit();
@@ -521,11 +514,49 @@ void display_update()
       EEPROM.write(0, batt_range_bar);
       EEPROM.commit();
       delay(100);
+      batt_full=false;
       start_sampling = false;
       previousMillis = millis();
     }
   }
-  if (device_on == true)
+
+    if (deviceConnected)
+    {
+      blu_logoon();
+    }
+    else
+    {
+      blu_logooff();
+    }
+    
+    if (charger_connected && !batt_full){
+
+      display.clear();
+      display_charging_status();
+    }
+    else if ( batt_full){
+      display_battery_bars(4);
+    }
+    else
+      display_battery_bars(batt_range_bar);
+
+    display.display();
+  }
+
+void display_loadvalue()
+{
+if (reset_values == true)
+  {
+
+    prev_display_data1 = 0;
+    display_data = 0;
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.setFont(ArialMT_Plain_24);
+    display.drawString(25, 25, "0.00Kg");
+    display.display();
+    reset_values = false;
+  }
+    if (device_on == true)
   {
     if (prev_display_data1 <= display_data)
     {
@@ -541,24 +572,8 @@ void display_update()
     display.drawString(25, 25, String(disp));
     display.setTextAlignment(TEXT_ALIGN_LEFT);
     display.setFont(ArialMT_Plain_10);
-    if (deviceConnected)
-    {
-      blu_logoon();
-    }
-    else
-    {
-      blu_logooff();
-    }
-    
-    if (charger_connected && !batt_full)
-      display_charging_status();
-    else if (batt_full)
-      display_battery_bars(4);
-    else
-      display_battery_bars(batt_range_bar);
 
-    display.display();
-  }
+}
 }
 
 void setup()
@@ -682,9 +697,18 @@ void loop()
     // Read battery status and update in display
 
     // update display
-    display_update();
+   
+    
+  
+       display_update();
+    if(charger_connected == false){
+      display_loadvalue();
+    }
+   
+  
     if (deviceConnected)
     {
+    
       if (send_data_flag)
       {
         if (init_data != "b\0")
