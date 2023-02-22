@@ -1,12 +1,16 @@
 // ble logo
 // limit switch gpio change
-// battery value after removal of charger
 // faster update of load cell values in display
 // battery value previous and current comparison
 // battery value stored in EEPROM
-// battery value display after charging increased to 5seconds
+// Add a battery bar instead of battery percentage
+// stop resending peak values
+// Reset - display clear
 
-// TODO : Add a battery bar instead of battery percentage
+// TODO
+// 2. remove initializing message during charging
+// 3. make charger symbol bigger during charging
+// 4. calibration - offset
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -26,7 +30,7 @@ char char_received;
 bool charger_connected = false;
 
 int batt_range_bar;
- 
+
 float scale1_data;
 float scale2_data;
 
@@ -162,6 +166,11 @@ bool BLE_device_command(String inCmd)
     init_data = "z\0";
     return 1;
   }
+  else if (inCmd.indexOf("RS") >= 0)
+  {
+    init_data = "r\0";
+    return 1;
+  }
   else
   {
     init_data = "invalidCmd";
@@ -276,11 +285,10 @@ void init_loadcell2()
   Serial.println(scale2.get_units(5), 1); // print the average of 5 readings from the ADC minus tare weight (not set) divided
   // by the SCALE parameter (not set yet)
 
+  // scale2.set_scale(-461050.f);
 
- // scale2.set_scale(-461050.f);
-  
   // scale2.set_scale(-459750.f); // this value is obtained by calibrating the scale with known weights; see the README for details
-  scale2.set_scale(-511150.f); // this value is obtained by calibrating the scale with known weights; see the README for details
+  scale2.set_scale(-433050.f); // this value is obtained by calibrating the scale with known weights; see the README for details
   scale2.tare();               // reset the scale to 0
 
   Serial.println("After setting up the scale:");
@@ -305,12 +313,6 @@ void init_oled()
   // Initialising the UI will init the display too.
   display.init();
   display.flipScreenVertically();
-  display.clear();
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 0, "Initializing");
-  display.drawString(0, 20, "Please Wait..");
-  display.display();
 }
 
 uint32_t battery_value = 0;
@@ -385,7 +387,7 @@ void check_battery_status()
 
 void display_charging_status()
 {
-  
+
   int x = 105;
   int y = 0;
   display.drawRect(x + 0, y + 0, 19, 10);
@@ -394,7 +396,46 @@ void display_charging_status()
   display.drawLine(x + 4, y + 0, x + 0, y + 4);
   display.drawLine(x + 0, y + 4, x + 4, y + 4);
   display.drawLine(x + 4, y + 4, x + 0, y + 8);
-  
+}
+
+void display_big_charging_status()
+{
+
+  int x = 18;
+  int y = 12;
+  display.drawRect(x + 0, y + 0, 79, 40);
+  display.drawRect(x - 1, y - 1, 81, 42);
+  display.drawRect(x - 2, y - 2, 83, 44);
+
+  display.fillRect(x + 79, y + 10, 16, 20);
+  x = 50;
+  display.drawLine(x + 18, y + 0, x + 0, y + 18);
+  display.drawLine(x + 0, y + 18, x + 18, y + 18);
+  display.drawLine(x + 18, y + 18, x + 0, y + 36);
+
+  display.drawLine(x + 18 - 1, y + 0, x + 0 - 1, y + 18 + 1);
+  display.drawLine(x + 0 - 1, y + 18 + 1, x + 18 - 1, y + 18 + 1);
+  display.drawLine(x + 18 - 1, y + 18 + 1, x + 0 - 1, y + 36);
+
+  display.drawLine(x + 18 + 1, y + 0, x + 0 + 1, y + 18 - 1);
+  display.drawLine(x + 0 + 1, y + 18 - 1, x + 18 + 1, y + 18 - 1);
+  display.drawLine(x + 18 + 1, y + 18 - 1, x + 0 + 1, y + 36);
+}
+
+void display_big_battery_full_status()
+{
+  int x = 18;
+  int y = 12;
+  display.drawRect(x + 0, y + 0, 79, 40);
+  display.drawRect(x - 1, y - 1, 81, 42);
+  display.drawRect(x - 2, y - 2, 83, 44);
+
+  display.fillRect(x + 79, y + 10, 16, 20);
+
+  display.fillRect(x + 3, y + 2, 16, 36);
+  display.fillRect(x + 22, y + 2, 16, 36);
+  display.fillRect(x + 41, y + 2, 16, 36);
+  display.fillRect(x + 60, y + 2, 16, 36);
 }
 
 // ota update function
@@ -476,7 +517,7 @@ bool batt_full = false;
 
 void display_update()
 {
-  
+
   if ((digitalRead(battery_status1_pin) == LOW) && (digitalRead(battery_status2_pin) == HIGH))
   {
     charger_connected = true;
@@ -514,40 +555,45 @@ void display_update()
       EEPROM.write(0, batt_range_bar);
       EEPROM.commit();
       delay(100);
-      batt_full=false;
+      batt_full = false;
       start_sampling = false;
       previousMillis = millis();
-    }
-  }
-
-    if (deviceConnected)
-    {
-      blu_logoon();
-    }
-    else
-    {
-      blu_logooff();
-    }
-    
-    if (charger_connected && !batt_full){
-
       display.clear();
-      display_charging_status();
     }
-    else if ( batt_full){
-      display_battery_bars(4);
-    }
-    else
-      display_battery_bars(batt_range_bar);
-
-    display.display();
   }
+
+  if (deviceConnected)
+  {
+    blu_logoon();
+  }
+  else
+  {
+    blu_logooff();
+  }
+
+  if (charger_connected && !batt_full)
+  {
+
+    display.clear();
+    //display_charging_status();
+    display_big_charging_status();
+  }
+  else if (batt_full)
+  {
+    //display_battery_bars(4);
+    display_big_battery_full_status();
+  }
+  else{
+    display_battery_bars(batt_range_bar);
+  }
+
+  display.display();
+}
 
 void display_loadvalue()
 {
-if (reset_values == true)
+  if (reset_values == true)
   {
-
     prev_display_data1 = 0;
     display_data = 0;
     display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -556,7 +602,7 @@ if (reset_values == true)
     display.display();
     reset_values = false;
   }
-    if (device_on == true)
+  if (device_on == true)
   {
     if (prev_display_data1 <= display_data)
     {
@@ -572,46 +618,36 @@ if (reset_values == true)
     display.drawString(25, 25, String(disp));
     display.setTextAlignment(TEXT_ALIGN_LEFT);
     display.setFont(ArialMT_Plain_10);
-
-}
-}
-
-void setup()
-{
-  Serial.begin(115200);
-
-  Serial.println("Firmware Version 2.0.0");
-  delay(2500);
-  pinMode(battery_analog_pin, INPUT);
-  pinMode(LOAD_SWITCH, OUTPUT);
-  pinMode(battery_enable_pin, OUTPUT);
-  digitalWrite(LOAD_SWITCH, HIGH);
-  digitalWrite(battery_enable_pin, HIGH);
-  delay(250);
-
-  EEPROM.begin(1);
-
-  if (device_on == true)
-  {
-    init_oled();
-    init_BLE();
-    init_loadcell1();
-
-    init_loadcell2();
-    display.clear();
-
-    pinMode(battery_status1_pin, INPUT);
-    pinMode(battery_status2_pin, INPUT);
-
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(0, 0, "Done");
-    display.display();
-
-    pinMode(LIMIT_SWITCH, INPUT);
-    pinMode(ON_OFF_RESET_PIN, INPUT);                         // changes made
-    attachInterrupt(ON_OFF_RESET_PIN, ON_OFF_RESET, FALLING); // changes made
   }
+}
+
+void init_system_setup()
+{
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(0, 0, "Initializing");
+  display.drawString(0, 20, "Please Wait..");
+  display.display();
+
+  init_BLE();
+  init_loadcell1();
+  init_loadcell2();
+
+  display.clear();
+
+  // pinMode(battery_status1_pin, INPUT);
+  // pinMode(battery_status2_pin, INPUT);
+
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_16);
+  display.drawString(0, 0, "Done");
+  display.display();
+
+  pinMode(LIMIT_SWITCH, INPUT);
+  pinMode(ON_OFF_RESET_PIN, INPUT);                         // changes made
+  attachInterrupt(ON_OFF_RESET_PIN, ON_OFF_RESET, FALLING); // changes made
+
   int temp_value = 0;
   for (int i = 0; i < 500; i++)
     temp_value = temp_value + analogRead(battery_analog_pin);
@@ -624,7 +660,7 @@ void setup()
 
   int battery_eeprom = EEPROM.read(0);
   Serial.println(battery_eeprom);
-  if (batt_range_bar > battery_eeprom && battery_eeprom !=0)
+  if (batt_range_bar > battery_eeprom && battery_eeprom != 0)
   {
     batt_range_bar = battery_eeprom;
   }
@@ -638,22 +674,79 @@ void setup()
   previousMillis = millis();
 }
 
+void setup()
+{
+  Serial.begin(115200);
+
+  Serial.println("Firmware Version 2.0.0");
+  delay(500);
+  pinMode(battery_analog_pin, INPUT);
+  pinMode(LOAD_SWITCH, OUTPUT);
+  pinMode(battery_enable_pin, OUTPUT);
+  digitalWrite(LOAD_SWITCH, HIGH);
+  digitalWrite(battery_enable_pin, HIGH);
+  // delay(250);
+  pinMode(battery_status1_pin, INPUT);
+  pinMode(battery_status2_pin, INPUT);
+
+  if ((digitalRead(battery_status1_pin) == LOW) && (digitalRead(battery_status2_pin) == HIGH))
+  {
+    charger_connected = true;
+    Serial.println("charger connected");
+  }
+  else if ((digitalRead(battery_status1_pin) == HIGH) && (digitalRead(battery_status2_pin) == LOW))
+  {
+    charger_connected = true;
+    batt_full = true;
+  }
+  init_oled();
+ 
+
+  while (charger_connected)
+  {
+    if ((digitalRead(battery_status1_pin) == HIGH) && (digitalRead(battery_status2_pin) == HIGH))
+    {
+      charger_connected = false;
+      break;
+    }
+
+    if ((charger_connected) && (batt_full))
+    {
+      // display bigger battery full
+       Serial.println("battery full");
+      display_big_battery_full_status();
+    }
+    else{
+      // display bigger charging battery
+      Serial.println("charging");
+      display_big_charging_status();
+    }
+    display.display();
+  
+  }
+
+  EEPROM.begin(1);
+
+  if (device_on == true)
+  {
+    init_system_setup();
+  }
+}
 
 void loop()
 {
   unsigned long currentMillis = millis();
 
   if (((currentMillis - previousMillis) >= 20000) && !charger_connected)
-  { 
+  {
     digitalWrite(battery_enable_pin, HIGH);
-    if(!start_sampling)
+    if (!start_sampling)
     {
       start_sampling = true;
       previousMillis_batt = currentMillis;
-    
     }
-    if(currentMillis - previousMillis_batt > 2000)
-    {  
+    if (currentMillis - previousMillis_batt > 2000)
+    {
       previousMillis = currentMillis;
       int temp_value = 0;
       for (int i = 0; i < 10; i++)
@@ -684,36 +777,32 @@ void loop()
     if (digitalRead(LIMIT_SWITCH) == LOW)
     {
       display_data = scale1.get_units(10);
-      if (display_data < 0)
+      if (display_data < 0.1)
         display_data = 0.0;
     }
     // if limit switch is low then read 10kg load cell
     else if (digitalRead(LIMIT_SWITCH) == HIGH)
     {
       display_data = scale2.get_units(10);
-      if (display_data < 0)
+      if (display_data < 0.1)
         display_data = 0.0;
     }
     // Read battery status and update in display
 
     // update display
-   
-    
-  
-       display_update();
-    if(charger_connected == false){
+    if (charger_connected == false)
+    {
       display_loadvalue();
     }
-   
-  
+    display_update();
+
     if (deviceConnected)
     {
-    
       if (send_data_flag)
       {
-        if (init_data != "b\0")
+        if (init_data != "r\0")
         {
-          if(init_data != "z\0")
+          if (init_data != "z\0")
           {
             if (display_data != prev_data_sent)
             {
@@ -723,20 +812,29 @@ void loop()
                 prev_display_data1 = display_data;
                 init_data.remove(1);
                 init_data += display_data;
+                for (int i = 0; i < init_data.length(); i++)
+                  tx_data += init_data[i];
+
+                tx_data += display_data;
+                pTxCharacteristic->setValue(tx_data); // Notify fromSerial.
+                pTxCharacteristic->notify();
               }
             }
           }
           else
           {
-              init_data.remove(1);
-              init_data += battery_range;
-          }
-          for (int i = 0; i < init_data.length(); i++)
-            tx_data += init_data[i];
+            init_data.remove(1);
+            init_data += battery_range;
+            for (int i = 0; i < init_data.length(); i++)
+              tx_data += init_data[i];
 
-          tx_data += display_data;
-          pTxCharacteristic->setValue(tx_data); // Notify fromSerial.
-          pTxCharacteristic->notify();
+            tx_data += display_data;
+            pTxCharacteristic->setValue(tx_data); // Notify fromSerial.
+            pTxCharacteristic->notify();
+            send_data_flag = false;
+          }
+
+          // init_data = "";
         }
         else
         {
@@ -791,7 +889,6 @@ void loop()
           Serial.println("OTA MODE ENTER");
           display_ota_mode();
           OTA_UPDATE(); // OTA update function
-
         }
       }
     }
@@ -800,4 +897,4 @@ void loop()
     // Long Press OTA mode over
   }
 }
-  //////// void loop finish
+//////// void loop finish
